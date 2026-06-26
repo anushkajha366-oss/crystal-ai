@@ -1,0 +1,145 @@
+{
+  "project_name": "Crystal AI",
+  "theme": "DARK",
+  "archetype": "5 (Luxury)",
+  "design_philosophy": "Dark luxury meets ethereal magic. Precision + sophistication. Core metaphor: Light refracting through a crystal — clarity, precision, and beauty emerging from complexity.",
+  "color_palette": {
+    "base": "#0a0524",
+    "primary_accent": "#2bf0ff",
+    "secondary_accent": "#7a3cff",
+    "tertiary_accent": "#8fe6ff",
+    "deep_tone": "#180a3a",
+    "hover_active": "#e8a0d8",
+    "success": "#4db89f",
+    "surface": "rgba(24, 10, 58, 0.4)",
+    "surface_glass": "rgba(255, 255, 255, 0.1)",
+    "text_primary": "#ffffff",
+    "text_secondary": "rgba(255, 255, 255, 0.7)"
+  },
+  "typography": {
+    "fonts": {
+      "headlines": "Syne",
+      "body": "Outfit",
+      "monospace": "JetBrains Mono"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-bold",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-semibold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium",
+      "body": "text-base leading-relaxed text-white/80",
+      "small": "text-sm text-white/60",
+      "mood_indicator": "text-[11px] uppercase tracking-[0.15em] font-medium"
+    }
+  },
+  "layout_and_spacing": {
+    "grid": "8px base grid, tight luxury spacing",
+    "container_padding": "p-8 md:p-12",
+    "general": {
+      "header": "Fixed sticky header with Logo + 4-pill Mood Selector + perf quick-peek + user menu. backdrop-blur-xl bg-[#0a0524]/60 z-50",
+      "sidebar": "Collapsible sidebar nav. backdrop-blur-md bg-[#180a3a]/40 border-r border-white/5",
+      "main_content": "Relative z-10, top-[header-height], min-h-screen",
+      "background": "Full-window Three.js tunnel pinned behind all content. z-[-1] fixed inset-0"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "Heavy transparency rgba(255,255,255,0.1) to rgba(255,255,255,0.4). backdrop-blur-2xl. Minimal borders (e.g. border border-white/10). Prefer inner glows.",
+    "shadows": "Minimal drop shadows. Use colored glowing box-shadows. Example: shadow-[0_0_30px_rgba(43,240,255,0.15)]",
+    "borders": "Avoid rigid solid borders. Use gradient borders or 1px border-white/5.",
+    "gradients": "Avoid galaxy gradients. Use subtle radial glows and bloom effects."
+  },
+  "mood_selector_system": {
+    "description": "Globally affects typography weight, button speed, particle density, bloom intensity, crystal color temp",
+    "modes": {
+      "Deep": {
+        "icon": "Mountain",
+        "effect": "Low bloom, deep blue/indigo ambient, slow particles, heavy typography"
+      },
+      "Review": {
+        "icon": "Book",
+        "effect": "Balanced bloom, soft cyan glow, steady particles, clear typography"
+      },
+      "Grind": {
+        "icon": "Lightning",
+        "effect": "High bloom, electric cyan and violet flashes, fast particles, energetic typography"
+      },
+      "Drained": {
+        "icon": "Moon",
+        "effect": "Minimal bloom, dim grey/violet ambient, very few/slow particles, soft/light typography"
+      }
+    },
+    "ui_states": {
+      "active": "full opacity + max glow",
+      "inactive": "40% opacity"
+    }
+  },
+  "threejs_tunnel": {
+    "description": "Hero visual is a Three.js wormhole tunnel",
+    "specs": "Cylindrical tunnel of additive points, SphereGeometry remapped, vertex shader with 3D Simplex noise, fragment shader with radial fade. UnrealBloomPass postprocessing, 300 drifting cyan motes. Scroll warps camera down tunnel; mouse banks flight and repels walls.",
+    "confidence_feedback": "Crystal glow intensity matches confidence score.",
+    "placement": "Full viewport fixed behind content"
+  },
+  "key_modules": {
+    "dashboard": {
+      "layout": "Bento grid (Mode B Control Room layout)",
+      "components": "crystal tunnel hero (background), mood selector, quick stats (confidence%, questions answered, topics mastered), resume CTA, recent activity feed"
+    },
+    "adaptive_quizzing": {
+      "components": "Question card (glassmorphism), confidence slider 1-5, MCQ/free-text input, real-time crystal feedback, progress bar"
+    },
+    "flashcards": {
+      "components": "3D card flip with R3F or CSS 3D transforms, confidence marking, spaced repetition stats"
+    },
+    "ai_chatbot": {
+      "components": "Conversational dialog, mic icon, scrollable history. Chat bubbles with glassmorphism."
+    },
+    "pyq_analyzer": {
+      "components": "Filter exam+year, topic frequency heatmap (D3.js or custom grid), recommended order list"
+    },
+    "performance_analytics": {
+      "components": "Line/bar charts (Recharts with custom glass tooltips), weak area spotlight, confidence distribution, streak badges"
+    },
+    "rule_20_80_dashboard": {
+      "components": "Ranked topic list, cumulative impact %, time allocation, Focus mode button"
+    },
+    "auth": {
+      "components": "Emergent Google OAuth login screen. Center glassmorphism card floating in crystal void."
+    }
+  },
+  "component_styling": {
+    "pill_buttons": "Rounded-full, backdrop-blur-md, bg-white/5 border border-white/10. Active: bg-white/20 border-[#2bf0ff]/50 shadow-[0_0_15px_rgba(43,240,255,0.3)]",
+    "confidence_slider": "Custom styled range input or interactive div. Track: bg-white/10. Thumb: glowing circle bg-[#2bf0ff] shadow-[0_0_10px_#2bf0ff].",
+    "question_card": "Glassmorphism panel. p-8 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl.",
+    "flashcard": "w-full aspect-[4/3] rounded-2xl relative preserve-3d transition-transform duration-700. Front and back faces with backface-hidden.",
+    "chat_bubbles": "User: bg-white/10 rounded-2xl rounded-tr-sm. AI: bg-[#180a3a]/60 border border-[#7a3cff]/30 rounded-2xl rounded-tl-sm.",
+    "stat_cards": "Flat glass panels, subtle hover lift (-translate-y-1), border border-white/5 hover:border-[#2bf0ff]/30 transition-all duration-300.",
+    "charts": "Recharts with transparent backgrounds, cyan (#2bf0ff) and violet (#7a3cff) lines/bars. No grid lines or very subtle white/5."
+  },
+  "animations": {
+    "page_transitions": "Framer Motion fade and slight scale up (0.98 to 1).",
+    "panel_reveals": "Staggered fade up from bottom (y: 20 to 0).",
+    "mood_switch_transitions": "Smooth color tweening in Three.js (duration: 1.5s). UI transitions 0.5s ease.",
+    "hover_states": "Glow intensity increases, borders brighten, slight negative Y translation for cards."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "Duotone or Regular weight, matched to text color or primary accent."
+  },
+  "testing": {
+    "data_testid": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case."
+  },
+  "media": {
+    "user_avatar": {
+      "url": "https://images.pexels.com/photos/31869537/pexels-photo-31869537.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Professional headshot for user profile avatar."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Ensure the Three.js canvas is placed globally and acts as the background for all routes.",
+    "Implement the Mood Context to globally share the current mood state, affecting both React UI and Three.js scene parameters.",
+    "Adhere strictly to the glassmorphism specifications (heavy transparency, backdrop-blur, subtle inner borders).",
+    "Do NOT use standard Shadcn card styles. Customize them to fit the dark luxury glassmorphism look.",
+    "Use @phosphor-icons/react for icons.",
+    "Use 'react-icons/fc' FcGoogle for the Google login button instead of an image.",
+    "Always add data-testid to interactive elements."
+  ]
+}
