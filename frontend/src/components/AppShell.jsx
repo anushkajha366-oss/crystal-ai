@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   House, Target, Cards, ChatCircleText, ChartBar, ListNumbers,
-  Sparkle, SignOut, List as ListIcon, X
+  Sparkle, SignOut, List as ListIcon, X, FileText
 } from "@phosphor-icons/react";
 import MoodSelector from "@/components/MoodSelector";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,6 +11,7 @@ import { useMood } from "@/contexts/MoodContext";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: House, key: "dashboard" },
+  { to: "/documents", label: "Documents", icon: FileText, key: "documents" },
   { to: "/quiz", label: "Adaptive Quiz", icon: Target, key: "quiz" },
   { to: "/flashcards", label: "Flashcards", icon: Cards, key: "flashcards" },
   { to: "/chat", label: "AI Chat Quiz", icon: ChatCircleText, key: "chat" },

@@ -1,5 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header, UploadFile, File
+from fastapi.responses import JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -13,7 +13,12 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+from pypdf import PdfReader
+from docx import Document as DocxDocument
+import io
+import json as jsonlib
+import re as relib
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -248,7 +253,16 @@ async def next_question(
     query: Dict[str, Any] = {"difficulty": {"$in": target_diff}}
     if topic:
         query["topic"] = topic
-    docs = await db.questions.find(query, {"_id": 0}).to_list(200)
+    # Prefer questions sourced from user's own documents
+    user_doc_ids = await db.documents.distinct("doc_id", {"user_id": user.user_id, "status": "processed"})
+    if user_doc_ids:
+        doc_sources = [f"doc:{d}" for d in user_doc_ids]
+        doc_query = {**query, "source": {"$in": doc_sources}}
+        docs = await db.questions.find(doc_query, {"_id": 0}).to_list(200)
+        if not docs:
+            docs = await db.questions.find({"source": {"$in": doc_sources}}, {"_id": 0}).to_list(200)
+    else:
+        docs = await db.questions.find(query, {"_id": 0}).to_list(200)
     if not docs:
         docs = await db.questions.find({}, {"_id": 0}).to_list(200)
     if not docs:
@@ -599,7 +613,33 @@ PYQ_DATA = [
 
 
 @api_router.get("/pyq")
-async def pyq_analyzer(exam: Optional[str] = None, year: Optional[int] = None):
+async def pyq_analyzer(
+    request: Request,
+    exam: Optional[str] = None,
+    year: Optional[int] = None,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    # If user has uploaded documents, return their topic frequencies as PYQ-style data
+    try:
+        user = await get_current_user(request, session_token, authorization)
+        docs = await _user_doc_topics(user.user_id)
+    except HTTPException:
+        docs = []
+
+    if docs:
+        rows = []
+        for d in docs:
+            for t in d.get("topics", []):
+                rows.append({
+                    "exam": d.get("filename", "Document")[:40],
+                    "year": "—",
+                    "topic": t["name"],
+                    "frequency": max(1, round(t.get("weight", 0) / 10)),
+                    "weight": t.get("weight", 0),
+                })
+        return rows
+
     rows = PYQ_DATA
     if exam:
         rows = [r for r in rows if r["exam"] == exam]
@@ -609,24 +649,442 @@ async def pyq_analyzer(exam: Optional[str] = None, year: Optional[int] = None):
 
 
 @api_router.get("/rule2080")
-async def rule_20_80(exam: Optional[str] = "JEE"):
-    rows = [r for r in PYQ_DATA if r["exam"] == exam]
-    # aggregate by topic
-    agg: Dict[str, int] = {}
-    for r in rows:
-        agg[r["topic"]] = agg.get(r["topic"], 0) + r["weight"]
-    total_weight = sum(agg.values()) or 1
-    items = [{"topic": t, "weight": w, "share": round(w / total_weight * 100, 1)} for t, w in agg.items()]
+async def rule_20_80(
+    request: Request,
+    exam: Optional[str] = "JEE",
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    # Prefer user-uploaded document topics if present
+    try:
+        user = await get_current_user(request, session_token, authorization)
+        docs = await _user_doc_topics(user.user_id)
+    except HTTPException:
+        docs = []
+
+    if docs:
+        agg: Dict[str, float] = {}
+        for d in docs:
+            for t in d.get("topics", []):
+                agg[t["name"]] = agg.get(t["name"], 0) + t.get("weight", 0)
+        total_weight = sum(agg.values()) or 1
+        items = [{"topic": t, "weight": round(w, 1), "share": round(w / total_weight * 100, 1)} for t, w in agg.items()]
+    else:
+        rows = [r for r in PYQ_DATA if r["exam"] == exam]
+        agg2: Dict[str, int] = {}
+        for r in rows:
+            agg2[r["topic"]] = agg2.get(r["topic"], 0) + r["weight"]
+        total_weight = sum(agg2.values()) or 1
+        items = [{"topic": t, "weight": w, "share": round(w / total_weight * 100, 1)} for t, w in agg2.items()]
+
     items.sort(key=lambda x: x["share"], reverse=True)
     cumulative = 0.0
     for it in items:
         cumulative += it["share"]
         it["cumulative"] = round(cumulative, 1)
-    # top 20% items by count
     cut = max(1, int(len(items) * 0.2))
     for i, it in enumerate(items):
         it["high_impact"] = i < cut or it["cumulative"] <= 80
     return items
+
+
+# ---------- Documents (PDF/DOCX upload + AI processing) ----------
+def extract_text(filename: str, raw: bytes) -> str:
+    name = filename.lower()
+    if name.endswith(".pdf"):
+        reader = PdfReader(io.BytesIO(raw))
+        return "\n\n".join((p.extract_text() or "") for p in reader.pages)
+    if name.endswith(".docx"):
+        doc = DocxDocument(io.BytesIO(raw))
+        return "\n".join(p.text for p in doc.paragraphs)
+    if name.endswith(".txt") or name.endswith(".md"):
+        return raw.decode("utf-8", errors="ignore")
+    raise HTTPException(400, "Unsupported file type. Use PDF, DOCX, TXT, or MD.")
+
+
+def _strip_json(text: str) -> str:
+    text = text.strip()
+    text = relib.sub(r"^```(?:json)?", "", text)
+    text = relib.sub(r"```$", "", text)
+    m = relib.search(r"[\[{].*[\]}]", text, relib.DOTALL)
+    return m.group(0) if m else text
+
+
+@api_router.post("/documents/upload")
+async def upload_document(
+    request: Request,
+    file: UploadFile = File(...),
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    raw = await file.read()
+    if len(raw) > 8 * 1024 * 1024:
+        raise HTTPException(400, "Max file size is 8 MB.")
+    text = extract_text(file.filename, raw)
+    if not text.strip():
+        raise HTTPException(400, "No extractable text in document.")
+
+    doc_id = f"doc_{uuid.uuid4().hex[:12]}"
+    snippet = text[:16000]  # cap context for LLM
+    await db.documents.insert_one({
+        "doc_id": doc_id,
+        "user_id": user.user_id,
+        "filename": file.filename,
+        "size": len(raw),
+        "text": snippet,
+        "char_count": len(text),
+        "status": "uploaded",
+        "topics": [],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"doc_id": doc_id, "filename": file.filename, "char_count": len(text), "status": "uploaded"}
+
+
+@api_router.get("/documents")
+async def list_documents(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    docs = await db.documents.find(
+        {"user_id": user.user_id}, {"_id": 0, "text": 0}
+    ).sort("created_at", -1).to_list(100)
+    return docs
+
+
+@api_router.delete("/documents/{doc_id}")
+async def delete_document(
+    doc_id: str,
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    await db.documents.delete_one({"doc_id": doc_id, "user_id": user.user_id})
+    await db.questions.delete_many({"source": f"doc:{doc_id}"})
+    await db.flashcards.delete_many({"doc_id": doc_id})
+    return {"ok": True}
+
+
+@api_router.post("/documents/{doc_id}/process")
+async def process_document(
+    doc_id: str,
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    doc = await db.documents.find_one({"doc_id": doc_id, "user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Document not found")
+
+    text = doc["text"]
+    sid = f"docproc-{doc_id}"
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=sid,
+        system_message=(
+            "You analyze study material and produce structured JSON ONLY. "
+            "No markdown, no commentary."
+        ),
+    ).with_model("gemini", "gemini-3-flash-preview")
+
+    prompt = f"""From the study material below, produce JSON with this exact shape:
+{{
+  "topics": [{{"name": "Topic name", "weight": 0-100, "summary": "one sentence"}}],
+  "questions": [{{"topic": "Topic name", "question": "...", "options": ["A","B","C","D"], "correct_index": 0, "explanation": "...", "difficulty": 1-5}}],
+  "flashcards": [{{"topic": "Topic name", "front": "concept/question", "back": "definition/answer"}}]
+}}
+
+Rules:
+- Identify 4-8 distinct topics covered.
+- Weight reflects rough relative importance/coverage in the material; weights should sum to ~100.
+- Generate 8-12 quality MCQ questions across topics with mixed difficulty (1-5).
+- Generate 8-12 flashcards covering key facts/definitions.
+- Output JSON ONLY.
+
+Material:
+\"\"\"
+{text[:14000]}
+\"\"\"
+"""
+    raw = await chat.send_message(UserMessage(text=prompt))
+    text_resp = raw if isinstance(raw, str) else str(raw)
+    try:
+        parsed = jsonlib.loads(_strip_json(text_resp))
+    except Exception as e:
+        raise HTTPException(500, f"AI returned invalid JSON: {e}")
+
+    topics = parsed.get("topics", [])[:8]
+    # normalize weights to sum to 100
+    total_w = sum(t.get("weight", 0) for t in topics) or 1
+    for t in topics:
+        t["weight"] = round(t.get("weight", 0) / total_w * 100, 1)
+        t["name"] = str(t.get("name", "Untitled"))[:80]
+
+    # save questions
+    q_docs = []
+    for q in parsed.get("questions", [])[:15]:
+        try:
+            qobj = QuizQuestion(
+                topic=str(q.get("topic", "General")),
+                question=str(q["question"]),
+                options=[str(o) for o in q["options"]][:4],
+                correct_index=int(q["correct_index"]),
+                explanation=str(q.get("explanation", "")),
+                difficulty=max(1, min(5, int(q.get("difficulty", 2)))),
+                source=f"doc:{doc_id}",
+            )
+            q_docs.append(qobj.model_dump())
+        except Exception:
+            continue
+    if q_docs:
+        await db.questions.insert_many(q_docs)
+
+    # save flashcards
+    fc_docs = []
+    for f in parsed.get("flashcards", [])[:15]:
+        try:
+            card = Flashcard(
+                user_id=user.user_id,
+                front=str(f["front"]),
+                back=str(f["back"]),
+                topic=str(f.get("topic", "General")),
+            )
+            d = card.model_dump()
+            d["created_at"] = d["created_at"].isoformat()
+            d["doc_id"] = doc_id
+            fc_docs.append(d)
+        except Exception:
+            continue
+    if fc_docs:
+        await db.flashcards.insert_many(fc_docs)
+
+    await db.documents.update_one(
+        {"doc_id": doc_id, "user_id": user.user_id},
+        {"$set": {
+            "status": "processed",
+            "topics": topics,
+            "question_count": len(q_docs),
+            "flashcard_count": len(fc_docs),
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    return {
+        "doc_id": doc_id,
+        "topics": topics,
+        "questions_generated": len(q_docs),
+        "flashcards_generated": len(fc_docs),
+    }
+
+
+async def _user_doc_topics(user_id: str) -> List[Dict[str, Any]]:
+    docs = await db.documents.find(
+        {"user_id": user_id, "status": "processed"}, {"_id": 0, "topics": 1, "filename": 1, "doc_id": 1}
+    ).to_list(100)
+    return docs
+
+
+# ---------- Bookmarks & Review Queue ----------
+class BookmarkBody(BaseModel):
+    question_id: str
+
+
+@api_router.post("/bookmarks")
+async def add_bookmark(
+    body: BookmarkBody,
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    q = await db.questions.find_one({"id": body.question_id}, {"_id": 0})
+    if not q:
+        raise HTTPException(404, "Question not found")
+    await db.bookmarks.update_one(
+        {"user_id": user.user_id, "question_id": body.question_id},
+        {"$set": {
+            "user_id": user.user_id,
+            "question_id": body.question_id,
+            "topic": q["topic"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api_router.delete("/bookmarks/{question_id}")
+async def remove_bookmark(
+    question_id: str,
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    await db.bookmarks.delete_one({"user_id": user.user_id, "question_id": question_id})
+    return {"ok": True}
+
+
+@api_router.get("/bookmarks")
+async def list_bookmarks(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    rows = await db.bookmarks.find({"user_id": user.user_id}, {"_id": 0}).to_list(500)
+    return rows
+
+
+@api_router.get("/quiz/review-queue")
+async def review_queue(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    """Returns combined bookmarked + previously wrong questions (deduped)."""
+    user = await get_current_user(request, session_token, authorization)
+    bookmarks = await db.bookmarks.find({"user_id": user.user_id}, {"_id": 0}).to_list(500)
+    bookmark_ids = {b["question_id"] for b in bookmarks}
+    # previously wrong
+    wrong = await db.attempts.find(
+        {"user_id": user.user_id, "correct": False}, {"_id": 0}
+    ).to_list(2000)
+    wrong_ids = {w["question_id"] for w in wrong}
+    all_ids = list(bookmark_ids | wrong_ids)
+    if not all_ids:
+        return []
+    qs = await db.questions.find({"id": {"$in": all_ids}}, {"_id": 0}).to_list(500)
+    # tag origin
+    result = []
+    for q in qs:
+        result.append({
+            "id": q["id"],
+            "topic": q["topic"],
+            "question": q["question"],
+            "options": q["options"],
+            "difficulty": q["difficulty"],
+            "bookmarked": q["id"] in bookmark_ids,
+            "previously_wrong": q["id"] in wrong_ids,
+        })
+    return result
+
+
+# ---------- Streaks ----------
+@api_router.get("/analytics/streak")
+async def streak_info(
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    attempts = await db.attempts.find(
+        {"user_id": user.user_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(5000)
+
+    # daily streak: count consecutive UTC days with at least 1 attempt, ending today or yesterday
+    days = set()
+    for a in attempts:
+        ts = a.get("created_at")
+        if isinstance(ts, str):
+            day = ts[:10]
+        else:
+            day = ts.isoformat()[:10]
+        days.add(day)
+
+    today = datetime.now(timezone.utc).date()
+    daily_streak = 0
+    d = today
+    # allow streak to be valid if today not yet practiced but yesterday was
+    if d.isoformat() not in days:
+        d = d - timedelta(days=1)
+    while d.isoformat() in days:
+        daily_streak += 1
+        d = d - timedelta(days=1)
+
+    # best correct-in-a-row from chronological order
+    chrono = list(reversed(attempts))
+    best_run = 0
+    cur = 0
+    for a in chrono:
+        if a.get("correct"):
+            cur += 1
+            best_run = max(best_run, cur)
+        else:
+            cur = 0
+    return {
+        "daily_streak": daily_streak,
+        "best_correct_run": best_run,
+        "days_practiced": len(days),
+    }
+
+
+# ---------- SSE Chat Stream ----------
+@api_router.post("/chat/stream")
+async def chat_stream(
+    body: ChatBody,
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    sid = body.session_id or f"chat-{user.user_id}-{uuid.uuid4().hex[:8]}"
+
+    # persist user message immediately
+    await db.chat_messages.insert_one({
+        "user_id": user.user_id,
+        "session_id": sid,
+        "role": "user",
+        "content": body.message,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=sid,
+        system_message=(
+            "You are Crystal, an AI exam tutor. Engage learners in a Socratic quiz. "
+            "Ask one focused question at a time, give concise explanations after they answer, "
+            "and progressively raise the difficulty. Keep replies under 120 words. "
+            "Use plain language. Never use markdown headers."
+        ),
+    ).with_model("gemini", "gemini-3-flash-preview")
+
+    async def gen():
+        # send session id first
+        yield f"event: meta\ndata: {{\"session_id\": \"{sid}\"}}\n\n"
+        full = []
+        try:
+            async for ev in chat.stream_message(UserMessage(text=body.message)):
+                if isinstance(ev, TextDelta):
+                    chunk = ev.content
+                    full.append(chunk)
+                    # SSE data line — escape newlines
+                    safe = chunk.replace("\n", "\\n")
+                    yield f"data: {safe}\n\n"
+                elif isinstance(ev, StreamDone):
+                    break
+        except Exception as e:
+            logger.error(f"stream failed: {e}")
+            yield f"event: error\ndata: {str(e)}\n\n"
+        # persist assistant reply
+        await db.chat_messages.insert_one({
+            "user_id": user.user_id,
+            "session_id": sid,
+            "role": "assistant",
+            "content": "".join(full),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        yield "event: done\ndata: \n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ---------- Health ----------

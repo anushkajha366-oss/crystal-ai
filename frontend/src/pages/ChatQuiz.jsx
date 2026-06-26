@@ -29,12 +29,68 @@ export default function ChatQuiz() {
     setInput("");
     setMessages((m) => [...m, { role: "user", content: text, _local: true }]);
     setSending(true);
+    // placeholder assistant bubble that we'll fill via streaming
+    let assistantIdx;
+    setMessages((m) => {
+      assistantIdx = m.length;
+      return [...m, { role: "assistant", content: "", _local: true, _streaming: true }];
+    });
+
     try {
-      const r = await api.post("/chat/quiz", { message: text, session_id: sessionId });
-      if (!sessionId) setSessionId(r.data.session_id);
-      setMessages((m) => [...m, { role: "assistant", content: r.data.reply, _local: true }]);
+      const resp = await fetch(`${api.defaults.baseURL}/chat/stream`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, session_id: sessionId }),
+      });
+      if (!resp.body) throw new Error("no stream");
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop() || "";
+        for (const evt of parts) {
+          const lines = evt.split("\n");
+          let event = "message";
+          let data = "";
+          for (const ln of lines) {
+            if (ln.startsWith("event:")) event = ln.slice(6).trim();
+            else if (ln.startsWith("data:")) data += ln.slice(5).trimStart();
+          }
+          if (event === "meta") {
+            try {
+              const meta = JSON.parse(data);
+              if (meta.session_id && !sessionId) setSessionId(meta.session_id);
+            } catch {}
+          } else if (event === "message") {
+            const chunk = data.replace(/\\n/g, "\n");
+            setMessages((m) => {
+              const copy = [...m];
+              copy[copy.length - 1] = {
+                ...copy[copy.length - 1],
+                content: (copy[copy.length - 1].content || "") + chunk,
+              };
+              return copy;
+            });
+          } else if (event === "done") {
+            setMessages((m) => {
+              const copy = [...m];
+              copy[copy.length - 1] = { ...copy[copy.length - 1], _streaming: false };
+              return copy;
+            });
+          }
+        }
+      }
     } catch (e) {
-      setMessages((m) => [...m, { role: "assistant", content: "The crystal flickered. Try again.", _local: true }]);
+      setMessages((m) => {
+        const copy = [...m];
+        copy[copy.length - 1] = { role: "assistant", content: "The crystal flickered. Try again.", _local: true };
+        return copy;
+      });
     } finally { setSending(false); }
   };
 
@@ -79,7 +135,9 @@ export default function ChatQuiz() {
           </div>
         )}
 
-        {messages.map((m, i) => (
+        {messages.map((m, i) => {
+          if (m.role === "assistant" && !m.content) return null;
+          return (
           <motion.div
             key={i}
             initial={m._local ? { opacity: 0, y: 8 } : false}
@@ -87,7 +145,7 @@ export default function ChatQuiz() {
             className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+              className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
                 m.role === "user" ? "bg-white/8 rounded-tr-sm" : "bg-white/[0.02] rounded-tl-sm"
               }`}
               style={
@@ -97,11 +155,15 @@ export default function ChatQuiz() {
               }
             >
               {m.content}
+              {m._streaming && (
+                <span className="inline-block w-1.5 h-4 ml-1 align-middle animate-pulse" style={{ background: config.palette.primary }} />
+              )}
             </div>
           </motion.div>
-        ))}
+          );
+        })}
 
-        {sending && (
+        {sending && messages[messages.length - 1]?.content === "" && (
           <div className="flex justify-start">
             <div className="rounded-2xl px-4 py-3 text-sm bg-white/[0.02] border border-white/10 font-mono text-white/40">
               crystal thinking…

@@ -85,6 +85,25 @@ export default function Dashboard() {
         />
       </div>
 
+      {streak && (streak.daily_streak > 0 || streak.best_correct_run > 0) && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="glass rounded-2xl p-5" data-testid="daily-streak">
+            <div className="mood-label text-white/40 mb-1">Daily streak</div>
+            <div className="font-mono text-3xl flex items-baseline gap-2" style={{ color: config.palette.primary }}>
+              {streak.daily_streak}
+              <span className="text-xs text-white/40">days</span>
+            </div>
+          </div>
+          <div className="glass rounded-2xl p-5">
+            <div className="mood-label text-white/40 mb-1">Best run</div>
+            <div className="font-mono text-3xl flex items-baseline gap-2" style={{ color: config.palette.secondary }}>
+              {streak.best_correct_run}
+              <span className="text-xs text-white/40">in a row</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
         <h2 className="font-display text-2xl mb-4 flex items-center gap-3">
           <Sparkle weight="fill" color={config.palette.primary} size={20} />

@@ -40,11 +40,18 @@ const MOOD_CONFIG = {
 export function MoodProvider({ children }) {
   const [mood, setMood] = useState(() => localStorage.getItem("crystal_mood") || "review");
   const [confidence, setConfidence] = useState(0.6); // 0-1, drives bloom
+  const [burstCount, setBurstCount] = useState(0);
+  const [burstColor, setBurstColor] = useState("#2bf0ff");
 
   useEffect(() => {
     localStorage.setItem("crystal_mood", mood);
     document.documentElement.setAttribute("data-mood", mood);
   }, [mood]);
+
+  const triggerBurst = (color) => {
+    if (color) setBurstColor(color);
+    setBurstCount((c) => c + 1);
+  };
 
   const value = useMemo(() => ({
     mood,
@@ -53,7 +60,10 @@ export function MoodProvider({ children }) {
     setConfidence,
     config: MOOD_CONFIG[mood],
     moods: MOOD_CONFIG,
-  }), [mood, confidence]);
+    burstCount,
+    burstColor,
+    triggerBurst,
+  }), [mood, confidence, burstCount, burstColor]);
 
   return <MoodContext.Provider value={value}>{children}</MoodContext.Provider>;
 }

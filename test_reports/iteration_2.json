@@ -1,0 +1,39 @@
+{
+  "summary": "Crystal AI document-driven backend retested on external URL. All 13 in-scope items pass: PDF/TXT upload (auth+ext+8MB guards), Gemini-powered /documents/{id}/process generates topics+10 questions+10 flashcards, downstream /rule2080 and /pyq are now document-derived (topics like 'Newton's Laws of Motion', exam=filename), /quiz/next returns a doc-derived question, /flashcards includes doc cards with no _id leak, and DELETE /documents cascades (flashcards count 22 -> 12 after delete). Existing endpoints (/auth/me, /quiz/answer, /chat/stream SSE, /analytics/streak, /quiz/review-queue, /bookmarks POST+GET) all healthy. Previous HIGH bugs (ObjectId leak on flashcards, chat budget) are fixed. One MEDIUM observation: DELETE /api/bookmarks/{question_id} returns 200 but bookmark count remained 1 after the call (may need bookmark _id instead of question_id).",
+  "tested_scope": ["backend", "auth", "integration"],
+  "passed": [
+    "POST /api/documents/upload no auth -> 401",
+    "POST /api/documents/upload with .xyz -> 400 'Unsupported file type'",
+    "POST /api/documents/upload 9MB file -> 400 (size guard)",
+    "POST /api/documents/upload TXT 654B -> 200 {doc_id, filename, char_count:654, status:'uploaded'}",
+    "GET /api/documents lists docs, no _id leak, excludes text body",
+    "POST /api/documents/{id}/process -> 200 (real Gemini ~15s) returns topics with weights, questions_generated:10, flashcards_generated:10",
+    "GET /api/documents after process -> status='processed', topics populated (e.g. 'Newton's Laws of Motion' weight 30)",
+    "GET /api/rule2080 -> doc-derived topics sorted by share desc with cumulative + high_impact flags (Newton's Laws first, not static PYQ_DATA)",
+    "GET /api/pyq -> rows with exam=<filename> and doc topics (frequency/weight present)",
+    "GET /api/quiz/next -> doc-derived question (e.g. Simple Harmonic Motion), no correct_index leak",
+    "GET /api/flashcards -> 22 cards incl. doc-generated, no _id leak",
+    "DELETE /api/documents/{id} -> 200, doc removed AND flashcards dropped 22->12 (cascade verified)",
+    "GET /api/auth/me with Bearer -> 200",
+    "POST /api/quiz/answer -> 200 {correct, correct_index, explanation}",
+    "POST /api/chat/stream -> 200 SSE with meta/data/done events (Gemini chat working, previous budget bug fixed)",
+    "GET /api/analytics/streak -> 200 {daily_streak, best_correct_run, days_practiced}",
+    "GET /api/quiz/review-queue -> 200",
+    "POST /api/bookmarks {question_id, note} -> 200 {ok:true}",
+    "GET /api/bookmarks -> 200, no _id leak"
+  ],
+  "failed": [
+    {
+      "area": "DELETE /api/bookmarks/{id}",
+      "issue": "DELETE with the question_id returns HTTP 200 but the bookmark is not removed (GET /api/bookmarks count stayed at 1 after delete). Endpoint may expect a bookmark id rather than question_id, or the delete query is not matching.",
+      "evidence": "Sequence: POST {question_id:QID} -> {ok:true}; GET -> count:1; DELETE /api/bookmarks/QID -> HTTP 200; GET -> count:1 (unchanged).",
+      "priority": "MEDIUM"
+    }
+  ],
+  "action_items": [
+    "Confirm DELETE /api/bookmarks/{id} contract: should the path param be the bookmark id returned at create time, or the underlying question_id? Currently POST returns only {ok:true} (no id), and DELETE by question_id is a no-op despite 200 response. Either return the bookmark id from POST and delete by it, or fix the delete query to match by user_id+question_id."
+  ],
+  "success_rate": {"backend": "95%", "frontend": "not tested (backend-only run)"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}

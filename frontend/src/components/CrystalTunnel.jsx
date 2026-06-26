@@ -11,12 +11,12 @@ import { useMood } from "@/contexts/MoodContext";
 export default function CrystalTunnel() {
   const mountRef = useRef(null);
   const moodRef = useRef(null);
-  const { config, confidence } = useMood();
+  const { config, confidence, burstCount, burstColor } = useMood();
 
   // keep latest mood values in a ref so the rAF closure sees them
   useEffect(() => {
-    moodRef.current = { config, confidence };
-  }, [config, confidence]);
+    moodRef.current = { config, confidence, burstCount, burstColor };
+  }, [config, confidence, burstCount, burstColor]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -201,6 +201,8 @@ export default function CrystalTunnel() {
     window.addEventListener("resize", onResize);
 
     const targetColors = { a: new THREE.Color(0x2bf0ff), b: new THREE.Color(0x7a3cff) };
+    let burstSeen = 0;
+    let burstEnergy = 0; // decays over time
 
     let raf;
     const clock = new THREE.Clock();
@@ -209,16 +211,27 @@ export default function CrystalTunnel() {
       const t = clock.getElapsedTime();
       uniforms.uTime.value = t;
 
-      const m = moodRef.current || { config, confidence };
+      const m = moodRef.current || { config, confidence, burstCount: 0, burstColor: "#2bf0ff" };
       const cfg = m.config;
 
-      // smooth color toward mood palette
-      targetColors.a.set(cfg.palette.primary);
+      // detect burst trigger
+      if (m.burstCount !== burstSeen) {
+        burstSeen = m.burstCount;
+        burstEnergy = 1.0;
+        // shift target colors briefly toward burst color
+        const c = new THREE.Color(m.burstColor || cfg.palette.primary);
+        targetColors.a.lerp(c, 0.8);
+      }
+      burstEnergy *= 0.94;
+
+      // smooth color toward mood palette (overridden during burst)
+      targetColors.a.lerp(new THREE.Color(cfg.palette.primary), 0.05 * (1 - burstEnergy));
       targetColors.b.set(cfg.palette.secondary);
-      uniforms.uColorA.value.lerp(targetColors.a, 0.04);
+      uniforms.uColorA.value.lerp(targetColors.a, 0.06);
       uniforms.uColorB.value.lerp(targetColors.b, 0.04);
-      uniforms.uSwirl.value += (cfg.swirl - uniforms.uSwirl.value) * 0.05;
-      uniforms.uGlow.value += ((0.3 + m.confidence * 0.9) * cfg.bloom * 2 - uniforms.uGlow.value) * 0.05;
+      uniforms.uSwirl.value += ((cfg.swirl + burstEnergy * 1.2) - uniforms.uSwirl.value) * 0.05;
+      const targetGlow = (0.3 + m.confidence * 0.9) * cfg.bloom * 2 + burstEnergy * 2.0;
+      uniforms.uGlow.value += (targetGlow - uniforms.uGlow.value) * 0.08;
 
       // scroll-driven camera depth
       scrollVel *= 0.92;

@@ -11,6 +11,7 @@ import AuthCallback from "@/components/AuthCallback";
 
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
+import Documents from "@/pages/Documents";
 import Quiz from "@/pages/Quiz";
 import Flashcards from "@/pages/Flashcards";
 import ChatQuiz from "@/pages/ChatQuiz";
@@ -44,6 +45,7 @@ function AppRouter() {
       <Route path="/" element={<Login />} />
       <Route element={<ProtectedRoutes />}>
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/documents" element={<Documents />} />
         <Route path="/quiz" element={<Quiz />} />
         <Route path="/flashcards" element={<Flashcards />} />
         <Route path="/chat" element={<ChatQuiz />} />
