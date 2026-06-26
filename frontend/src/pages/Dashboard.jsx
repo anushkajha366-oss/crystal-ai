@@ -29,12 +29,14 @@ export default function Dashboard() {
   const { config, setConfidence } = useMood();
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
+  const [streak, setStreak] = useState(null);
 
   useEffect(() => {
     api.get("/analytics/summary").then((r) => {
       setSummary(r.data);
       if (r.data.accuracy) setConfidence(Math.min(1, r.data.accuracy / 100));
     }).catch(() => {});
+    api.get("/analytics/streak").then((r) => setStreak(r.data)).catch(() => {});
   }, []); // eslint-disable-line
 
   const quickActions = [

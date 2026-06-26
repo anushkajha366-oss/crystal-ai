@@ -1,0 +1,21 @@
+{
+  "summary": "Frontend-only retest after Dashboard 'streak is not defined' fix. Dashboard now loads cleanly with no runtime/page/console errors. All key sections render (Welcome, 4 stat cards, Daily Streak, Best Run, Quick start). Sidebar Documents nav present and routes to /documents. Adaptive Quiz, 20-80 Rule, AI Chat Quiz pages all render with expected primary UI (options + bookmark, ranked topics, chat input + send). Mood/header pills clickable.",
+  "tested_scope": ["frontend", "integration"],
+  "passed": [
+    "/dashboard loads with cookie session_token=test_session_crystal_001 - 0 pageerror, 0 console errors",
+    "No 'streak is not defined' ReferenceError observed",
+    "Dashboard renders Welcome heading + all 4 stat cards (Accuracy, Avg Confidence, Attempts, Topics Touched)",
+    "Daily Streak (1 days) and Best Run (0) row visible",
+    "Quick start grid renders (Adaptive Quiz, Flashcards, AI Chat Quiz, 20-80 Focus)",
+    "Sidebar Documents nav clickable -> /documents loads with upload card",
+    "Adaptive Quiz card route (/quiz) renders with bookmark button",
+    "20-80 Rule (/rule2080) renders ranked topics ('The vital few')",
+    "AI Chat Quiz (/chat) renders chat input + send button",
+    "Header mood pills clickable without errors"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "n/a (not retested)", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
