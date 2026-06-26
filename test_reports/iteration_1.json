@@ -1,0 +1,50 @@
+{
+  "summary": "Crystal AI backend smoke tested via external URL. 15/17 endpoints pass. Two HIGH/MEDIUM failures: POST /api/flashcards returns 500 due to ObjectId leak in response; POST /api/chat/quiz returns 500 due to Gemini LLM budget error from emergentintegrations. Auth (bearer + cookie), quiz flow, quiz/generate (Gemini real call worked), analytics, pyq, rule2080 all OK.",
+  "tested_scope": ["backend", "auth", "integration"],
+  "passed": [
+    "GET /api/ -> 200 {service:'Crystal AI', status:'ok'}",
+    "GET /api/auth/me without auth -> 401 {detail:'Not authenticated'}",
+    "GET /api/auth/me with Bearer test_session_crystal_001 -> 200 returns user object",
+    "GET /api/auth/me with cookie session_token -> 200 (cookie auth works)",
+    "GET /api/quiz/topics -> 200 seeded topics returned",
+    "GET /api/quiz/next -> 200 returns id/topic/options/difficulty, NO correct_index leak",
+    "POST /api/quiz/answer -> 200 {correct, correct_index, explanation}",
+    "POST /api/quiz/generate {Physics - Mechanics, difficulty:2} -> 200, real Gemini AI question generated and persisted",
+    "GET /api/flashcards -> 200 []",
+    "POST /api/flashcards/review -> 200 {ok:true, next_review:<ISO date>} (spaced repetition works)",
+    "GET /api/chat/history -> 200 []",
+    "GET /api/analytics/summary -> 200 with accuracy, topic_accuracy, weak_topics, strong_topics",
+    "GET /api/analytics/trend -> 200 daily series",
+    "GET /api/pyq?exam=JEE -> 200 PYQ rows",
+    "GET /api/rule2080?exam=JEE -> 200 ranked topics with share, cumulative, high_impact",
+    "JSON serialization clean on all passing endpoints (no ObjectId leaks observed)"
+  ],
+  "failed": [
+    {
+      "area": "POST /api/flashcards (create)",
+      "issue": "Returns HTTP 500. Backend traceback: ValueError: [TypeError(\"'ObjectId' object is not iterable\"), TypeError('vars() argument must have __dict__ attribute')]. The response_model/return value still contains Mongo `_id` ObjectId, so FastAPI's jsonable_encoder fails when serializing.",
+      "evidence": "curl -X POST /api/flashcards {front, back, topic} -> HTTP 500. /var/log/supervisor/backend.err.log shows ObjectId serialization failure in fastapi.encoders.jsonable_encoder.",
+      "priority": "HIGH"
+    },
+    {
+      "area": "POST /api/chat/quiz (Gemini chat)",
+      "issue": "Returns HTTP 500. Backend log: emergentintegrations.llm.chat.ChatError: 'litellm.BadRequestError: OpenAIException - Budget has been exceeded! Current cost: 0.0, Max budget: 0.0'. Note: POST /api/quiz/generate (also Gemini) succeeded, so EMERGENT_LLM_KEY itself works — may be a session/model-specific budget issue with the chat path.",
+      "evidence": "server.py line 459 chat_quiz -> chat.send_message raises ChatError budget exceeded.",
+      "priority": "MEDIUM"
+    },
+    {
+      "area": "DELETE /api/flashcards/{id}",
+      "issue": "Not verifiable end-to-end because POST /api/flashcards fails (cannot obtain a card id). Endpoint itself was not directly hit with a valid id.",
+      "evidence": "Blocked by HIGH bug above.",
+      "priority": "LOW"
+    }
+  ],
+  "action_items": [
+    "Fix POST /api/flashcards to strip Mongo `_id` before returning (e.g., del doc['_id'] or return constructed Flashcard Pydantic model). Likely same pattern used elsewhere should be applied here.",
+    "Investigate chat/quiz Gemini budget error: confirm session_id / model choice and whether emergentintegrations LlmChat needs reinit, or budget reset; quiz/generate works so key is valid.",
+    "After fix, retest POST /api/flashcards and DELETE /api/flashcards/{id} end-to-end."
+  ],
+  "success_rate": {"backend": "88%", "frontend": "not tested (backend-only run)"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}
