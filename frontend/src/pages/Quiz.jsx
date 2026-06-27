@@ -9,6 +9,7 @@ export default function Quiz() {
   const { config, setConfidence, triggerBurst } = useMood();
   const [topics, setTopics] = useState([]);
   const [topic, setTopic] = useState("");
+  const [hasDocs, setHasDocs] = useState(false);
   const [q, setQ] = useState(null);
   const [selected, setSelected] = useState(null);
   const [conf, setConf] = useState(3);
@@ -27,6 +28,7 @@ export default function Quiz() {
   useEffect(() => {
     api.get("/quiz/topics").then((r) => setTopics(r.data));
     api.get("/bookmarks").then((r) => setBookmarkSet(new Set(r.data.map((b) => b.question_id))));
+    api.get("/documents").then((r) => setHasDocs(r.data.some((d) => d.status === "processed")));
   }, []);
 
   const loadQuestion = async (useAi = false) => {
@@ -57,8 +59,10 @@ export default function Quiz() {
         setLoading(false);
         return;
       }
-      if (useAi && topic) {
-        r = await api.post("/quiz/generate", { topic, difficulty: 3 });
+      if (useAi) {
+        const useTopic = topic || (topics.length > 0 ? topics[Math.floor(Math.random() * topics.length)].topic : "General");
+        r = await api.post("/quiz/generate", { topic: useTopic, difficulty: 3 });
+        toast.success("Generated a fresh question via Gemini");
       } else {
         r = await api.get("/quiz/next", { params: topic ? { topic } : {} });
       }
@@ -160,7 +164,7 @@ export default function Quiz() {
         </button>
         <button
           onClick={() => loadQuestion(true)}
-          disabled={!topic || reviewMode}
+          disabled={reviewMode || (!topic && !hasDocs && topics.length === 0)}
           data-testid="ai-generate-btn"
           className="rounded-full px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-40 transition"
           style={{

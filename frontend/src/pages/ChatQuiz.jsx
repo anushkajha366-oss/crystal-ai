@@ -37,54 +37,13 @@ export default function ChatQuiz() {
     });
 
     try {
-      const resp = await fetch(`${api.defaults.baseURL}/chat/stream`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, session_id: sessionId }),
+      const r = await api.post("/chat/quiz", { message: text, session_id: sessionId });
+      if (!sessionId && r.data.session_id) setSessionId(r.data.session_id);
+      setMessages((m) => {
+        const copy = [...m];
+        copy[copy.length - 1] = { role: "assistant", content: r.data.reply, _local: true };
+        return copy;
       });
-      if (!resp.body) throw new Error("no stream");
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const parts = buf.split("\n\n");
-        buf = parts.pop() || "";
-        for (const evt of parts) {
-          const lines = evt.split("\n");
-          let event = "message";
-          let data = "";
-          for (const ln of lines) {
-            if (ln.startsWith("event:")) event = ln.slice(6).trim();
-            else if (ln.startsWith("data:")) data += ln.slice(5).trimStart();
-          }
-          if (event === "meta") {
-            try {
-              const meta = JSON.parse(data);
-              if (meta.session_id && !sessionId) setSessionId(meta.session_id);
-            } catch {}
-          } else if (event === "message") {
-            const chunk = data.replace(/\\n/g, "\n");
-            setMessages((m) => {
-              const copy = [...m];
-              copy[copy.length - 1] = {
-                ...copy[copy.length - 1],
-                content: (copy[copy.length - 1].content || "") + chunk,
-              };
-              return copy;
-            });
-          } else if (event === "done") {
-            setMessages((m) => {
-              const copy = [...m];
-              copy[copy.length - 1] = { ...copy[copy.length - 1], _streaming: false };
-              return copy;
-            });
-          }
-        }
-      }
     } catch (e) {
       setMessages((m) => {
         const copy = [...m];

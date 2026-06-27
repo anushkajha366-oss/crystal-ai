@@ -1,15 +1,27 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, Trash, ArrowsLeftRight } from "@phosphor-icons/react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useMood } from "@/contexts/MoodContext";
 
-function Card({ card, onReview, onDelete, accent }) {
+function Card({ card, onReview, onDelete, onAdvance, accent }) {
   const [flipped, setFlipped] = useState(false);
+  const [rating, setRating] = useState(false);
+
+  const rate = async (n) => {
+    setRating(true);
+    try {
+      await onReview(card.id, n);
+      setFlipped(false);
+      onAdvance?.(card.id);
+    } finally { setRating(false); }
+  };
+
   return (
     <div className="relative preserve-3d" style={{ perspective: 1000 }}>
       <motion.div
-        onClick={() => setFlipped(!flipped)}
+        onClick={() => !rating && setFlipped(!flipped)}
         data-testid={`flashcard-${card.id}`}
         className="cursor-pointer relative w-full aspect-[4/3] rounded-2xl preserve-3d"
         animate={{ rotateY: flipped ? 180 : 0 }}
@@ -44,8 +56,10 @@ function Card({ card, onReview, onDelete, accent }) {
             {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
-                onClick={() => onReview(card.id, n)}
-                className="w-8 h-8 rounded-lg text-xs font-mono border border-white/10 hover:border-white/40 transition"
+                onClick={(e) => { e.stopPropagation(); rate(n); }}
+                disabled={rating}
+                data-testid={`rate-${card.id}-${n}`}
+                className="w-9 h-9 rounded-lg text-xs font-mono border border-white/10 hover:border-white/40 transition disabled:opacity-40"
                 style={n === card.confidence ? { background: `${accent}30`, borderColor: `${accent}80` } : {}}
               >
                 {n}
@@ -53,7 +67,7 @@ function Card({ card, onReview, onDelete, accent }) {
             ))}
           </div>
           <button
-            onClick={() => onDelete(card.id)}
+            onClick={(e) => { e.stopPropagation(); onDelete(card.id); }}
             className="text-white/40 hover:text-red-300 p-2"
           >
             <Trash size={16} />
@@ -85,8 +99,21 @@ export default function Flashcards() {
   };
 
   const review = async (id, n) => {
-    await api.post("/flashcards/review", { card_id: id, confidence: n });
+    const r = await api.post("/flashcards/review", { card_id: id, confidence: n });
+    const days = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 14 }[n] || 1;
+    toast.success(`Rated ${n}/5`, { description: `Next review in ${days} day${days > 1 ? "s" : ""}.` });
     load();
+    return r;
+  };
+
+  const advance = (id) => {
+    // Scroll to next un-rated card after a brief delay
+    setTimeout(() => {
+      const cardEls = document.querySelectorAll('[data-testid^="flashcard-"]');
+      const idx = Array.from(cardEls).findIndex((el) => el.getAttribute("data-testid") === `flashcard-${id}`);
+      const nextEl = cardEls[idx + 1];
+      if (nextEl) nextEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 350);
   };
 
   const remove = async (id) => {
@@ -152,7 +179,7 @@ export default function Flashcards() {
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5" data-testid="flashcards-grid">
         {cards.map((c) => (
-          <Card key={c.id} card={c} onReview={review} onDelete={remove} accent={config.palette.primary} />
+          <Card key={c.id} card={c} onReview={review} onDelete={remove} onAdvance={advance} accent={config.palette.primary} />
         ))}
         {cards.length === 0 && (
           <div className="col-span-full text-center text-white/40 py-12 font-mono text-sm">

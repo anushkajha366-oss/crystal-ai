@@ -1,0 +1,22 @@
+{
+  "summary": "Verified the 3 reported flows (chat, AI-generate quiz, flashcard rating) after fixes. All three primary flows pass end-to-end against the public URL. Chat now uses POST /api/chat/quiz (non-streaming) and renders the reply; AI-generate works without selecting a topic; flashcard rating persists confidence and next_review.",
+  "tested_scope": ["frontend", "backend", "integration"],
+  "passed": [
+    "Backend POST /api/chat/quiz with Bearer test_session_crystal_001 -> 200, returns {reply, session_id}",
+    "Backend POST /api/quiz/generate {topic:'Math', difficulty:3} -> 200, returns generated MCQ with options",
+    "Backend POST /api/flashcards/review {card_id, confidence:4} -> 200, next_review ~7 days out",
+    "GET /api/flashcards confirms confidence=4 persisted after UI rating click",
+    "UI /chat: typed 'What is 2+2?' -> POST /api/chat/quiz observed, reply rendered ('That's right, 2 + 2 is 4!'), no stuck thinking state, no call to /chat/stream",
+    "UI /quiz: AI-generate button is NOT disabled with 'All topics' (no topic) selected; click triggered POST /api/quiz/generate; quiz-card rendered (Momentum, difficulty 1/5)",
+    "UI /flashcards: existing card flipped, rate-<id>-4 button clicked, POST /api/flashcards/review observed, card flipped back to front, list reloaded with confidence=4 on that card"
+  ],
+  "failed": [],
+  "minor_observations": [
+    "Could not visually confirm toast text 'Rated 4/5 / Next review in 7 days' because the assertion ran after the toast TTL elapsed; backend persistence + card flip-back confirm the flow works. Not a blocker.",
+    "Backend /api/quiz/generate raises 500 ValueError if a client sends difficulty as a non-numeric string (e.g. 'medium'). The current frontend sends difficulty:3 so this is not user-visible; consider coercing/validating in server.py for robustness."
+  ],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
