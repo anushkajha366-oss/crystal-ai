@@ -936,6 +936,28 @@ PAPERS:
     return parsed
 
 
+class ConfidenceBody(BaseModel):
+    value: int
+
+
+@api_router.post("/confidence")
+async def log_confidence(body: ConfidenceBody, request: Request, session_token: Optional[str] = Cookie(None), authorization: Optional[str] = Header(None)):
+    user = await get_current_user(request, session_token, authorization)
+    await db.confidence_history.insert_one({
+        "user_id": user.user_id,
+        "value": max(1, min(10, int(body.value))),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"ok": True}
+
+
+@api_router.get("/confidence/history")
+async def confidence_history(request: Request, session_token: Optional[str] = Cookie(None), authorization: Optional[str] = Header(None)):
+    user = await get_current_user(request, session_token, authorization)
+    rows = await db.confidence_history.find({"user_id": user.user_id}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    return rows
+
+
 # ---------- Bookmarks & Review Queue ----------
 class BookmarkBody(BaseModel):
     question_id: str

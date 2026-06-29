@@ -72,6 +72,7 @@ export default function Documents() {
     localStorage.setItem("crystal_confidence", String(v));
     setConfidenceVal(v);
     setShowConfidence(false);
+    api.post("/confidence", { value: v }).catch(() => {});
     if (v - prev >= 2 && prev > 0) {
       triggerBurst(config.palette.primary);
       toast.success(`Confidence jumped ${prev} → ${v} 🚀`, { description: "The crystal flares!" });

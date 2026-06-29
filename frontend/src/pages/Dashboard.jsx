@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { LineChart, Line, ResponsiveContainer, Tooltip as RTooltip } from "recharts";
 import {
   Sparkle, Target, Cards, ChatCircleText, TrendUp, Lightning, ArrowRight
 } from "@phosphor-icons/react";
@@ -30,6 +31,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [streak, setStreak] = useState(null);
+  const [confHistory, setConfHistory] = useState([]);
 
   useEffect(() => {
     api.get("/analytics/summary").then((r) => {
@@ -37,6 +39,7 @@ export default function Dashboard() {
       if (r.data.accuracy) setConfidence(Math.min(1, r.data.accuracy / 100));
     }).catch(() => {});
     api.get("/analytics/streak").then((r) => setStreak(r.data)).catch(() => {});
+    api.get("/confidence/history").then((r) => setConfHistory(r.data.map((h, i) => ({ i, value: h.value })))).catch(() => {});
   }, []); // eslint-disable-line
 
   const quickActions = [
@@ -133,6 +136,26 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      {confHistory.length > 1 && (
+        <div className="glass-strong rounded-3xl p-6" data-testid="confidence-sparkline">
+          <div className="flex justify-between mb-2">
+            <div>
+              <div className="mood-label text-white/40">✨ Confidence over time</div>
+              <div className="font-display text-xl gold-text">Your crystal is brightening</div>
+            </div>
+            <div className="font-mono text-3xl gold-text">{confHistory[confHistory.length-1].value}/10</div>
+          </div>
+          <div style={{ height: 80 }}>
+            <ResponsiveContainer>
+              <LineChart data={confHistory}>
+                <RTooltip contentStyle={{ background: "rgba(10,10,10,0.9)", border: `1px solid ${config.palette.primary}40`, borderRadius: 12, color: "#fff" }} />
+                <Line type="monotone" dataKey="value" stroke={config.palette.primary} strokeWidth={2.5} dot={{ r: 3, fill: config.palette.primary }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {summary?.weak_topics?.length > 0 && (
         <div className="glass rounded-3xl p-7">
