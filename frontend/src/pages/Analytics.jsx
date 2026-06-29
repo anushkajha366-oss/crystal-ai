@@ -27,26 +27,29 @@ export default function Analytics() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="mood-label text-white/40 mb-2">Performance</div>
-        <h1 className="font-display text-4xl md:text-5xl">The crystal remembers.</h1>
+        <div className="mood-label text-white/40 mb-2">✨ Performance</div>
+        <h1 className="font-display text-4xl md:text-5xl gold-text">The crystal remembers.</h1>
+        <p className="text-white/50 mt-2">Every answer carved into your prep journey 📈</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass rounded-2xl p-5">
-          <div className="mood-label text-white/40 mb-1">Accuracy</div>
-          <div className="font-mono text-3xl" style={{ color: config.palette.primary }}>{summary.accuracy}%</div>
+        <div className="glass rounded-2xl p-5 hover:-translate-y-0.5 transition-all">
+          <div className="mood-label text-white/40 mb-1">🎯 Accuracy</div>
+          <div className="font-mono text-3xl gold-text">{summary.accuracy}%</div>
+          {summary.accuracy >= 80 && <div className="text-xs text-amber-200 mt-1">🔥 On fire!</div>}
         </div>
-        <div className="glass rounded-2xl p-5">
-          <div className="mood-label text-white/40 mb-1">Attempts</div>
-          <div className="font-mono text-3xl">{summary.total_attempts}</div>
+        <div className="glass rounded-2xl p-5 hover:-translate-y-0.5 transition-all">
+          <div className="mood-label text-white/40 mb-1">⚡ Attempts</div>
+          <div className="font-mono text-3xl silver-text">{summary.total_attempts}</div>
+          {summary.total_attempts >= 25 && <div className="text-xs text-white/60 mt-1">💪 Dedicated</div>}
         </div>
-        <div className="glass rounded-2xl p-5">
-          <div className="mood-label text-white/40 mb-1">Avg Confidence</div>
+        <div className="glass rounded-2xl p-5 hover:-translate-y-0.5 transition-all">
+          <div className="mood-label text-white/40 mb-1">🧠 Avg Confidence</div>
           <div className="font-mono text-3xl text-white/90">{summary.avg_confidence}</div>
         </div>
-        <div className="glass rounded-2xl p-5">
-          <div className="mood-label text-white/40 mb-1">Topics</div>
-          <div className="font-mono text-3xl">{summary.topics_touched}</div>
+        <div className="glass rounded-2xl p-5 hover:-translate-y-0.5 transition-all">
+          <div className="mood-label text-white/40 mb-1">🌐 Topics</div>
+          <div className="font-mono text-3xl silver-text">{summary.topics_touched}</div>
         </div>
       </div>
 

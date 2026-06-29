@@ -5,32 +5,32 @@ const MoodContext = createContext(null);
 const MOOD_CONFIG = {
   deep: {
     label: "Deep",
-    palette: { primary: "#7a3cff", secondary: "#2bf0ff" },
-    bloom: 0.22,
+    palette: { primary: "#d4af37", secondary: "#f5e6a8" },
+    bloom: 0.45,
     swirl: 0.39,
     particleCount: 220,
     speedMultiplier: 0.8,
   },
   review: {
     label: "Review",
-    palette: { primary: "#2bf0ff", secondary: "#8fe6ff" },
-    bloom: 0.5,
+    palette: { primary: "#c0c0c0", secondary: "#e8e8e8" },
+    bloom: 0.55,
     swirl: 0.6,
     particleCount: 300,
     speedMultiplier: 1.0,
   },
   grind: {
     label: "Grind",
-    palette: { primary: "#e8a0d8", secondary: "#7a3cff" },
-    bloom: 0.9,
+    palette: { primary: "#ffd700", secondary: "#ffaa00" },
+    bloom: 1.0,
     swirl: 1.4,
     particleCount: 380,
     speedMultiplier: 1.4,
   },
   drained: {
     label: "Drained",
-    palette: { primary: "#4db89f", secondary: "#8fe6ff" },
-    bloom: 0.15,
+    palette: { primary: "#9a8d7a", secondary: "#c9c0b0" },
+    bloom: 0.2,
     swirl: 0.2,
     particleCount: 160,
     speedMultiplier: 0.6,
@@ -46,6 +46,9 @@ export function MoodProvider({ children }) {
   useEffect(() => {
     localStorage.setItem("crystal_mood", mood);
     document.documentElement.setAttribute("data-mood", mood);
+    const weights = { deep: 600, review: 500, grind: 800, drained: 300 };
+    document.documentElement.style.setProperty("--mood-weight", weights[mood] || 500);
+    document.documentElement.style.setProperty("--mood-speed", mood === "grind" ? "0.15s" : mood === "drained" ? "0.6s" : "0.35s");
   }, [mood]);
 
   const triggerBurst = (color) => {

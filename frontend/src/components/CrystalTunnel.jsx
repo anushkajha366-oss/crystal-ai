@@ -23,7 +23,7 @@ export default function CrystalTunnel() {
     if (!mount) return;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0a0524, 0.025);
+    scene.fog = new THREE.FogExp2(0x050505, 0.025);
 
     const camera = new THREE.PerspectiveCamera(
       72,
@@ -36,7 +36,7 @@ export default function CrystalTunnel() {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x0a0524, 1);
+    renderer.setClearColor(0x050505, 1);
     mount.appendChild(renderer.domElement);
 
     // ---- Tunnel geometry: ring of points stacked into depth ----
@@ -69,8 +69,8 @@ export default function CrystalTunnel() {
       uTime: { value: 0 },
       uCamZ: { value: 0 },
       uSwirl: { value: 0.6 },
-      uColorA: { value: new THREE.Color(0x2bf0ff) },
-      uColorB: { value: new THREE.Color(0x7a3cff) },
+      uColorA: { value: new THREE.Color(0xd4af37) },
+      uColorB: { value: new THREE.Color(0xc0c0c0) },
       uGlow: { value: 0.6 },
     };
 
@@ -167,7 +167,7 @@ export default function CrystalTunnel() {
     const moteGeom = new THREE.BufferGeometry();
     moteGeom.setAttribute("position", new THREE.BufferAttribute(motePos, 3));
     const moteMat = new THREE.PointsMaterial({
-      color: 0x8fe6ff,
+      color: 0xd4af37,
       size: 0.08,
       transparent: true,
       opacity: 0.5,
