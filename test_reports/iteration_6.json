@@ -1,0 +1,22 @@
+{
+  "summary": "Verified Documents page features: confidence modal (first-visit gating + localStorage save + non-reappearance), flashcard count modal (post-upload auto-open, count-25 processes, count-cancel closes, Process button reopens). Backend ?count=10 generates exactly 10 flashcards. No console runtime errors.",
+  "tested_scope": ["frontend", "backend", "integration"],
+  "passed": [
+    "Confidence modal appears on first visit (localStorage cleared)",
+    "Slider set to 7, save closes modal, localStorage.crystal_confidence === '7' (verified via proper React-compatible event)",
+    "On reload with saved value, confidence modal does NOT reappear",
+    "Upload .txt -> count-modal auto-appears",
+    "count-cancel closes modal without processing",
+    "Process button on unprocessed doc reopens count-modal",
+    "count-25 click -> Document processed toast '12 questions, 25 flashcards, 6 topics extracted' visible; doc shows READY",
+    "Backend POST /api/documents/{id}/process?count=10 -> flashcards_generated=10 (exact match)",
+    "Zero console errors during full flow"
+  ],
+  "failed": [],
+  "action_items": [
+    "Note: setting <input type='range'> value via plain DOM event does not trigger React onChange. Tests must use the native value setter pattern (Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set). This is a test-script concern only; the feature works correctly for real user drag interactions."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}

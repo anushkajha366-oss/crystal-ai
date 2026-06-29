@@ -772,6 +772,7 @@ async def delete_document(
 async def process_document(
     doc_id: str,
     request: Request,
+    count: int = 20,
     session_token: Optional[str] = Cookie(None),
     authorization: Optional[str] = Header(None),
 ):
@@ -791,6 +792,7 @@ async def process_document(
         ),
     ).with_model("gemini", "gemini-3-flash-preview")
 
+    target_count = max(5, min(50, int(count)))
     prompt = f"""From the study material below, produce JSON with this exact shape:
 {{
   "topics": [{{"name": "Topic name", "weight": 0-100, "summary": "one sentence"}}],
@@ -801,8 +803,8 @@ async def process_document(
 Rules:
 - Identify 4-8 distinct topics covered.
 - Weight reflects rough relative importance/coverage in the material; weights should sum to ~100.
-- Generate 8-12 quality MCQ questions across topics with mixed difficulty (1-5).
-- Generate 8-12 flashcards covering key facts/definitions.
+- Generate {max(8, target_count // 2)} quality MCQ questions across topics with mixed difficulty (1-5).
+- Generate EXACTLY {target_count} flashcards covering key facts/definitions.
 - Output JSON ONLY.
 
 Material:
@@ -845,7 +847,7 @@ Material:
 
     # save flashcards
     fc_docs = []
-    for f in parsed.get("flashcards", [])[:15]:
+    for f in parsed.get("flashcards", [])[:target_count]:
         try:
             card = Flashcard(
                 user_id=user.user_id,

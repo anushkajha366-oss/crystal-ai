@@ -10,6 +10,9 @@ export default function Documents() {
   const [docs, setDocs] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [processingId, setProcessingId] = useState(null);
+  const [countModal, setCountModal] = useState(null); // doc_id pending count selection
+  const [confidence, setConfidenceVal] = useState(() => parseInt(localStorage.getItem("crystal_confidence") || "5"));
+  const [showConfidence, setShowConfidence] = useState(() => !localStorage.getItem("crystal_confidence"));
   const fileRef = useRef(null);
 
   const load = async () => {
@@ -37,10 +40,10 @@ export default function Documents() {
         throw new Error(err.detail || "Upload failed");
       }
       const data = await r.json();
-      toast.success(`Uploaded ${data.filename}`, { description: `${data.char_count.toLocaleString()} chars extracted. Processing next…` });
+      toast.success(`Uploaded ${data.filename}`, { description: `${data.char_count.toLocaleString()} chars extracted.` });
       await load();
-      // auto-process
-      await process(data.doc_id);
+      // open count modal instead of auto-processing
+      setCountModal(data.doc_id);
     } catch (err) {
       toast.error(err.message || "Upload failed");
     } finally {
@@ -49,10 +52,11 @@ export default function Documents() {
     }
   };
 
-  const process = async (docId) => {
+  const process = async (docId, count = 20) => {
     setProcessingId(docId);
+    setCountModal(null);
     try {
-      const r = await api.post(`/documents/${docId}/process`);
+      const r = await api.post(`/documents/${docId}/process?count=${count}`);
       toast.success("Document processed", {
         description: `${r.data.questions_generated} questions, ${r.data.flashcards_generated} flashcards, ${r.data.topics.length} topics extracted.`,
       });
@@ -61,6 +65,19 @@ export default function Documents() {
     } catch (err) {
       toast.error(err.response?.data?.detail || "Processing failed");
     } finally { setProcessingId(null); }
+  };
+
+  const saveConfidence = (v) => {
+    const prev = parseInt(localStorage.getItem("crystal_confidence") || "0");
+    localStorage.setItem("crystal_confidence", String(v));
+    setConfidenceVal(v);
+    setShowConfidence(false);
+    if (v - prev >= 2 && prev > 0) {
+      triggerBurst(config.palette.primary);
+      toast.success(`Confidence jumped ${prev} → ${v} 🚀`, { description: "The crystal flares!" });
+    } else {
+      toast(`Confidence set to ${v}/10`);
+    }
   };
 
   const remove = async (docId) => {
@@ -148,7 +165,7 @@ export default function Documents() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => process(d.doc_id)}
+                    onClick={() => setCountModal(d.doc_id)}
                     disabled={processingId === d.doc_id}
                     data-testid={`process-${d.doc_id}`}
                     className="rounded-full px-3 py-1.5 text-xs flex items-center gap-1.5 text-black"
@@ -175,6 +192,60 @@ export default function Documents() {
           </div>
         ))}
       </div>
+
+      {countModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" data-testid="count-modal">
+          <div className="glass-strong rounded-3xl p-8 max-w-md w-full mx-4">
+            <div className="font-display text-2xl mb-2 gold-text">How many flashcards? 💎</div>
+            <div className="text-white/55 text-sm mb-6">Crystal will craft this many cards from your material.</div>
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[{n: 10, l: "Few", e: "🪶"}, {n: 25, l: "Moderate", e: "📚"}, {n: 50, l: "Many", e: "🔥"}].map(({n, l, e}) => (
+                <button
+                  key={n}
+                  onClick={() => process(countModal, n)}
+                  data-testid={`count-${n}`}
+                  className="glass rounded-2xl p-4 hover:-translate-y-0.5 transition-all"
+                  style={{ border: `1px solid ${config.palette.primary}40` }}
+                >
+                  <div className="text-2xl mb-1">{e}</div>
+                  <div className="font-display text-lg">{l}</div>
+                  <div className="font-mono text-xs text-white/50">{n} cards</div>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setCountModal(null)} className="w-full text-xs text-white/50 hover:text-white/80 transition" data-testid="count-cancel">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {showConfidence && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" data-testid="confidence-modal">
+          <div className="glass-strong rounded-3xl p-8 max-w-md w-full mx-4">
+            <div className="font-display text-2xl mb-2 gold-text">How confident are you? ✨</div>
+            <div className="text-white/55 text-sm mb-6">Set your current prep confidence — Crystal will track jumps and celebrate milestones.</div>
+            <div className="flex items-center justify-between font-mono text-xs text-white/40 mb-2">
+              <span>1 · just starting</span><span>10 · exam-ready</span>
+            </div>
+            <input
+              type="range"
+              min="1" max="10" value={confidence}
+              onChange={(e) => setConfidenceVal(parseInt(e.target.value))}
+              data-testid="confidence-slider"
+              className="w-full mb-4"
+              style={{ accentColor: config.palette.primary }}
+            />
+            <div className="text-center font-mono text-4xl gold-text mb-6">{confidence}/10</div>
+            <button
+              onClick={() => saveConfidence(confidence)}
+              data-testid="confidence-save"
+              className="w-full rounded-full py-3 text-black font-medium"
+              style={{ background: `linear-gradient(135deg, ${config.palette.primary}, ${config.palette.secondary})` }}
+            >
+              Lock it in
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
