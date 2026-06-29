@@ -1,0 +1,23 @@
+{
+  "summary": "Retested POST /api/pyq/analyze after Form() fix. All 3 scenarios pass: happy path returns 200 with sections JSON; single-file and empty-syllabus validations return 400 with correct error messages.",
+  "tested_scope": ["backend"],
+  "passed": [
+    "TEST 1: 2 .txt files + non-empty syllabus -> HTTP 200 in 8.6s, response contains sections[] with topics, frequencies, weights, papers, plus recommendations[].",
+    "TEST 2: 1 file -> HTTP 400 'Upload at least 2 PYQ papers.'",
+    "TEST 3: 2 files + empty syllabus -> HTTP 400 'Syllabus text is required.'"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "n/a"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "evidence": {
+    "test1_status": 200,
+    "test1_time_s": 8.56,
+    "test1_response_keys": ["sections", "recommendations"],
+    "test2_status": 400,
+    "test2_detail": "Upload at least 2 PYQ papers.",
+    "test3_status": 400,
+    "test3_detail": "Syllabus text is required."
+  }
+}

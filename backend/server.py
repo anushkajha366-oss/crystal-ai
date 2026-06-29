@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header, UploadFile, File, Form
 from fastapi.responses import JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -893,7 +893,7 @@ async def _user_doc_topics(user_id: str) -> List[Dict[str, Any]]:
 async def pyq_analyze(
     request: Request,
     files: List[UploadFile] = File(...),
-    syllabus: str = "",
+    syllabus: str = Form(""),
     session_token: Optional[str] = Cookie(None),
     authorization: Optional[str] = Header(None),
 ):
