@@ -1,0 +1,26 @@
+{
+  "summary": "Tested /flashcards UI (no new-card-form, info note present), /pyq UI (all 3 testids present, no console errors), and backend /api/pyq/analyze validation + happy path. Frontend 100% pass. Backend validation errors return correct messages BUT the happy-path call fails because syllabus is not parsed from multipart form data — FastAPI treats `syllabus: str = ''` as a query param, so even a valid non-empty syllabus form field is ignored and returns 400 'Syllabus text is required.'",
+  "tested_scope": ["frontend", "backend", "integration"],
+  "passed": [
+    "GET /flashcards: data-testid=new-card-form NOT present",
+    "GET /flashcards: info note 'Cards are auto-generated... Head to Documents to upload material.' visible",
+    "GET /pyq: data-testid=pyq-files, pyq-syllabus, pyq-analyze-btn all present",
+    "No console runtime errors on /flashcards or /pyq",
+    "POST /api/pyq/analyze with 1 file -> 400 'Upload at least 2 PYQ papers.'",
+    "POST /api/pyq/analyze with 2 files + empty syllabus -> 400 'Syllabus text is required.'"
+  ],
+  "failed": [
+    {
+      "area": "backend",
+      "issue": "POST /api/pyq/analyze with 2 valid files + non-empty syllabus form field returns 400 'Syllabus text is required.' instead of 200 with sections JSON. Root cause: in server.py line 896, `syllabus: str = \"\"` is interpreted by FastAPI as a query parameter, not a multipart form field. It must be `syllabus: str = Form(\"\")` (or Form(...)) so the multipart body field is read. Reproduced with curl -F 'syllabus=Mechanics...' against the public URL; happy path never reaches the LLM call.",
+      "evidence": "curl -X POST https://tunnel-study.preview.emergentagent.com/api/pyq/analyze -H 'Authorization: Bearer test_session_crystal_001' -F 'files=@pyq1.txt' -F 'files=@pyq2.txt' -F 'syllabus=Mechanics: Newton laws...' -> HTTP 400 {\"detail\":\"Syllabus text is required.\"}",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "In /app/backend/server.py pyq_analyze (line ~896): change `syllabus: str = \"\"` to `syllabus: str = Form(\"\")` (ensure Form is imported from fastapi). Without this fix, the analyze flow is completely broken from the UI as well — submitting the form will always show the syllabus-required error."
+  ],
+  "success_rate": {"backend": "67%", "frontend": "100%"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}

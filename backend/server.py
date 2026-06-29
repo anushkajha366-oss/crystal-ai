@@ -889,6 +889,53 @@ async def _user_doc_topics(user_id: str) -> List[Dict[str, Any]]:
     return docs
 
 
+@api_router.post("/pyq/analyze")
+async def pyq_analyze(
+    request: Request,
+    files: List[UploadFile] = File(...),
+    syllabus: str = "",
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    if len(files) < 2:
+        raise HTTPException(400, "Upload at least 2 PYQ papers.")
+    if not syllabus.strip():
+        raise HTTPException(400, "Syllabus text is required.")
+    combined = []
+    for f in files[:6]:
+        raw = await f.read()
+        try:
+            t = extract_text(f.filename, raw)
+        except HTTPException:
+            continue
+        combined.append(f"### {f.filename}\n{t[:6000]}")
+    body = "\n\n".join(combined)[:24000]
+
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"pyq-{user.user_id}-{uuid.uuid4().hex[:6]}",
+        system_message="You analyze exam papers vs a syllabus and output JSON only.",
+    ).with_model("gemini", "gemini-3-flash-preview")
+    prompt = f"""Given multiple past-year exam papers and the official syllabus, produce JSON:
+{{"sections":[{{"name":"Section name from syllabus","topics":[{{"topic":"...","frequency":N,"weight":0-100,"papers":["filename1"]}}]}}],"recommendations":["short tip", ...]}}
+Rules: identify 2-4 sections from the syllabus, list 3-8 topics per section, weight reflects how often each topic appears across the papers (sum across all sections ≈ 100). Output JSON only.
+
+SYLLABUS:
+{syllabus[:4000]}
+
+PAPERS:
+{body}
+"""
+    raw = await chat.send_message(UserMessage(text=prompt))
+    text_resp = raw if isinstance(raw, str) else str(raw)
+    try:
+        parsed = jsonlib.loads(_strip_json(text_resp))
+    except Exception as e:
+        raise HTTPException(500, f"AI returned invalid JSON: {e}")
+    return parsed
+
+
 # ---------- Bookmarks & Review Queue ----------
 class BookmarkBody(BaseModel):
     question_id: str

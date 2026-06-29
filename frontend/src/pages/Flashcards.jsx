@@ -146,35 +146,8 @@ export default function Flashcards() {
         </div>
       </div>
 
-      <div className="glass-strong rounded-2xl p-5 space-y-3" data-testid="new-card-form">
-        <div className="mood-label text-white/40">New card</div>
-        <input
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          placeholder="Topic"
-          data-testid="card-topic"
-        />
-        <input
-          value={front}
-          onChange={(e) => setFront(e.target.value)}
-          placeholder="Front (question / prompt)"
-          data-testid="card-front"
-        />
-        <textarea
-          value={back}
-          onChange={(e) => setBack(e.target.value)}
-          placeholder="Back (answer)"
-          rows={2}
-          data-testid="card-back"
-        />
-        <button
-          onClick={create}
-          data-testid="create-card-btn"
-          className="rounded-full px-5 py-2.5 text-sm font-medium text-black flex items-center gap-2"
-          style={{ background: `linear-gradient(135deg, ${config.palette.primary}, ${config.palette.secondary})` }}
-        >
-          <Plus weight="bold" size={16} /> Create card
-        </button>
+      <div className="glass rounded-2xl p-4 text-sm text-white/55">
+        ✨ Cards are auto-generated when you process a document. Head to <span className="text-white/90">Documents</span> to upload material.
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5" data-testid="flashcards-grid">
